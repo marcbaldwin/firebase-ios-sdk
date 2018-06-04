@@ -22,7 +22,7 @@ namespace firebase {
 namespace firestore {
 namespace util {
 
-TEST(StringUtil, PrefixSuccessor) {
+TEST(StringUtilTest, PrefixSuccessor) {
   EXPECT_EQ(PrefixSuccessor("a"), "b");
   EXPECT_EQ(PrefixSuccessor("aaAA"), "aaAB");
   EXPECT_EQ(PrefixSuccessor("aaa\xff"), "aab");
@@ -32,9 +32,52 @@ TEST(StringUtil, PrefixSuccessor) {
   EXPECT_EQ(PrefixSuccessor(""), "");
 }
 
-TEST(StringUtil, ImmediateSuccessor) {
+TEST(StringUtilTest, ImmediateSuccessor) {
   EXPECT_EQ(ImmediateSuccessor("hello"), std::string("hello\0", 6));
   EXPECT_EQ(ImmediateSuccessor(""), std::string("\0", 1));
+}
+
+TEST(StringUtilTest, TrimTrailingNullsEmpty) {
+  std::string str;
+  TrimTrailingNulls(&str);
+  EXPECT_EQ(std::string{}, str);
+
+  str = std::string(1, '\0');
+  TrimTrailingNulls(&str);
+  EXPECT_EQ(std::string{}, str);
+
+  str = std::string(10, '\0');
+  TrimTrailingNulls(&str);
+  EXPECT_EQ(std::string{}, str);
+}
+
+// A simulated API call that generates null embedded data.
+void SimulatedCall(std::string* str, size_t len) {
+  for (size_t i = 0; i < len; ++i) {
+    (*str)[i] = i == 1 ? '\0' : 'a' + i;
+  }
+}
+
+TEST(StringUtilTest, TrimTrailingNulls) {
+  // Some APIs tell the length of the string
+  size_t len = 3;
+  std::string str(len + 1, '\0');
+  SimulatedCall(&str, len);
+
+  // We allocated enough space for the string and null, now resize
+  ASSERT_EQ((std::string{'a', '\0', 'c', '\0'}), str);
+  TrimTrailingNulls(&str);
+  EXPECT_EQ((std::string{'a', '\0', 'c'}), str);
+
+  // Some APIs tell the lenghth of the buffer and len + 1 allocates too much.
+  len = 4;
+  str = std::string(len + 1, '\0');
+  SimulatedCall(&str, len - 1);
+
+  // We allocated too much space.
+  ASSERT_EQ((std::string{'a', '\0', 'c', '\0', '\0'}), str);
+  TrimTrailingNulls(&str);
+  EXPECT_EQ((std::string{'a', '\0', 'c'}), str);
 }
 
 }  // namespace util

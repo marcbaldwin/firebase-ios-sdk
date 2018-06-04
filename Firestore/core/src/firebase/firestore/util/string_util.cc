@@ -48,6 +48,16 @@ std::string ImmediateSuccessor(absl::string_view s) {
   return out;
 }
 
+void TrimTrailingNulls(std::string* buffer) {
+  size_t pos = buffer->find_last_not_of('\0');
+  if (pos == std::string::npos) {
+    // No non-null characters
+    buffer->resize(0u);
+  } else {
+    buffer->resize(pos + 1);
+  }
+}
+
 }  // namespace util
 }  // namespace firestore
 }  // namespace firebase

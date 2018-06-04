@@ -65,6 +65,12 @@ std::string PrefixSuccessor(absl::string_view prefix);
  */
 std::string ImmediateSuccessor(absl::string_view s);
 
+/**
+ * Trims null characters off the end of a string. Useful after calling a C
+ * API that isn't precisely specified.
+ */
+void TrimTrailingNulls(std::string* buffer);
+
 }  // namespace util
 }  // namespace firestore
 }  // namespace firebase
