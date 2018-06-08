@@ -29,6 +29,7 @@
 #import "Firestore/Protos/objc/firestore/local/Target.pbobjc.h"
 
 #include "Firestore/core/src/firebase/firestore/local/leveldb_key.h"
+#include "Firestore/core/test/firebase/firestore/local/leveldb_testing.h"
 #include "absl/strings/string_view.h"
 #include "leveldb/db.h"
 
@@ -41,6 +42,7 @@ using leveldb::WriteOptions;
 using leveldb::Status;
 using firebase::firestore::local::LevelDbMutationKey;
 using firebase::firestore::local::LevelDbTransaction;
+using firebase::firestore::local::TestingLevelDbOpener;
 
 @interface FSTLevelDBTransactionTests : XCTestCase
 @end
@@ -50,15 +52,7 @@ using firebase::firestore::local::LevelDbTransaction;
 }
 
 - (void)setUp {
-  Options options;
-  options.error_if_exists = true;
-  options.create_if_missing = true;
-
-  NSString *dir = [FSTPersistenceTestHelpers levelDBDir];
-  DB *db;
-  Status status = DB::Open(options, [dir UTF8String], &db);
-  XCTAssert(status.ok(), @"Failed to create db: %s", status.ToString().c_str());
-  _db.reset(db);
+  _db = TestingLevelDbOpener::OpenForTesting();
 }
 
 - (void)tearDown {

@@ -18,6 +18,7 @@ if(HAVE_LEVELDB)
     SOURCES
       leveldb_key.h
       leveldb_key.cc
+      leveldb_opener.h
       leveldb_transaction.h
       leveldb_transaction.cc
     DEPENDS
@@ -51,3 +52,10 @@ cc_library(
     firebase_firestore_remote
     firebase_firestore_util
 )
+
+if(APPLE)
+  target_sources(
+    firebase_firestore_local PRIVATE
+    leveldb_opener_apple.mm
+  )
+endif()

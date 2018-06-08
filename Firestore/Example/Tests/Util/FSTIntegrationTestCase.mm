@@ -35,6 +35,7 @@
 #include "Firestore/core/src/firebase/firestore/model/database_id.h"
 #include "Firestore/core/src/firebase/firestore/util/autoid.h"
 #include "Firestore/core/src/firebase/firestore/util/string_apple.h"
+#include "Firestore/core/test/firebase/firestore/local/leveldb_testing.h"
 #include "absl/memory/memory.h"
 
 #import "Firestore/Source/API/FIRFirestore+Internal.h"
@@ -47,6 +48,7 @@
 namespace util = firebase::firestore::util;
 using firebase::firestore::auth::CredentialsProvider;
 using firebase::firestore::auth::EmptyCredentialsProvider;
+using firebase::firestore::local::TestingLevelDbOpener;
 using firebase::firestore::model::DatabaseId;
 using firebase::firestore::util::CreateAutoId;
 
@@ -63,7 +65,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setUp {
   [super setUp];
 
-  [self clearPersistence];
+  TestingLevelDbOpener::ClearData();
 
   _firestores = [NSMutableArray array];
   self.db = [self firestore];
@@ -82,17 +84,6 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma clang diagnostic pop
     _firestores = nil;
     [super tearDown];
-  }
-}
-
-- (void)clearPersistence {
-  NSString *levelDBDir = [FSTLevelDB documentsDirectory];
-  NSError *error;
-  if (![[NSFileManager defaultManager] removeItemAtPath:levelDBDir error:&error]) {
-    // file not found is okay.
-    XCTAssertTrue(
-        [error.domain isEqualToString:NSCocoaErrorDomain] && error.code == NSFileNoSuchFileError,
-        @"Failed to clear LevelDB Persistence: %@", error);
   }
 }
 

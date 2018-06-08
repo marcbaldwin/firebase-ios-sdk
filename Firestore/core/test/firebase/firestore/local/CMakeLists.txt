@@ -13,12 +13,22 @@
 # limitations under the License.
 
 if(HAVE_LEVELDB)
+  cc_library(
+    firebase_firestore_local_testing
+    SOURCES
+      leveldb_testing.cc
+      leveldb_testing.h
+    DEPENDS
+      firebase_firestore_local
+  )
+
   cc_test(
     firebase_firestore_local_persistence_leveldb_test
     SOURCES
       leveldb_key_test.cc
     DEPENDS
       firebase_firestore_local_persistence_leveldb
+      firebase_firestore_local_testing
   )
 endif()
 

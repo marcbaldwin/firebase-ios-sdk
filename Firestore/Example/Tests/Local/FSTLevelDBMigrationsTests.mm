@@ -26,13 +26,13 @@
 #import "Firestore/Source/Local/FSTLevelDBQueryCache.h"
 
 #include "Firestore/core/src/firebase/firestore/util/ordered_code.h"
+#include "Firestore/core/test/firebase/firestore/local/leveldb_testing.h"
 #include "leveldb/db.h"
-
-#import "Firestore/Example/Tests/Local/FSTPersistenceTestHelpers.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 using firebase::firestore::local::LevelDbTransaction;
+using firebase::firestore::local::TestingLevelDbOpener;
 using firebase::firestore::util::OrderedCode;
 using leveldb::DB;
 using leveldb::Options;
@@ -46,15 +46,7 @@ using leveldb::Status;
 }
 
 - (void)setUp {
-  Options options;
-  options.error_if_exists = true;
-  options.create_if_missing = true;
-
-  NSString *dir = [FSTPersistenceTestHelpers levelDBDir];
-  DB *db;
-  Status status = DB::Open(options, [dir UTF8String], &db);
-  XCTAssert(status.ok(), @"Failed to create db: %s", status.ToString().c_str());
-  _db.reset(db);
+  _db = TestingLevelDbOpener::OpenForTesting();
 }
 
 - (void)tearDown {
