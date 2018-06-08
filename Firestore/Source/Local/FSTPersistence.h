@@ -20,6 +20,7 @@
 
 #include "Firestore/core/src/firebase/firestore/auth/user.h"
 #include "Firestore/core/src/firebase/firestore/util/hard_assert.h"
+#include "Firestore/core/src/firebase/firestore/util/status.h"
 
 @class FSTDocumentKey;
 @protocol FSTMutationQueue;
@@ -67,10 +68,9 @@ struct FSTTransactionRunner;
 /**
  * Starts persistent storage, opening the database or similar.
  *
- * @param error An error object that will be populated if startup fails.
- * @return YES if persistent storage started successfully, NO otherwise.
+ * @return Status indicating whether or not persistent storage started successfully
  */
-- (BOOL)start:(NSError **)error;
+- (firebase::firestore::util::Status)start;
 
 /** Releases any resources held during eager shutdown. */
 - (void)shutdown;

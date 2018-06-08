@@ -27,6 +27,7 @@
 
 using firebase::firestore::auth::HashUser;
 using firebase::firestore::auth::User;
+using firebase::firestore::util::Status;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -65,11 +66,11 @@ NS_ASSUME_NONNULL_BEGIN
   return self;
 }
 
-- (BOOL)start:(NSError **)error {
+- (Status)start {
   // No durable state to read on startup.
   HARD_ASSERT(!self.isStarted, "FSTMemoryPersistence double-started!");
   self.started = YES;
-  return YES;
+  return Status::OK();
 }
 
 - (void)shutdown {

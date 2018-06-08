@@ -47,6 +47,7 @@
 
 #include "Firestore/core/src/firebase/firestore/auth/credentials_provider.h"
 #include "Firestore/core/src/firebase/firestore/core/database_info.h"
+#include "Firestore/core/src/firebase/firestore/local/leveldb_opener.h"
 #include "Firestore/core/src/firebase/firestore/model/database_id.h"
 #include "Firestore/core/src/firebase/firestore/util/hard_assert.h"
 #include "Firestore/core/src/firebase/firestore/util/log.h"
@@ -56,8 +57,10 @@ namespace util = firebase::firestore::util;
 using firebase::firestore::auth::CredentialsProvider;
 using firebase::firestore::auth::User;
 using firebase::firestore::core::DatabaseInfo;
+using firebase::firestore::local::LevelDbOpener;
 using firebase::firestore::model::DatabaseId;
 using firebase::firestore::model::DocumentKeySet;
+using firebase::firestore::util::Status;
 
 using firebase::firestore::util::internal::Executor;
 
@@ -171,27 +174,27 @@ NS_ASSUME_NONNULL_BEGIN
     // enabled.
     garbageCollector = [[FSTNoOpGarbageCollector alloc] init];
 
-    NSString *dir = [FSTLevelDB storageDirectoryForDatabaseInfo:*self.databaseInfo
-                                             documentsDirectory:[FSTLevelDB documentsDirectory]];
+    std::unique_ptr<LevelDbOpener> opener = LevelDbOpener::Create(_databaseInfo);
 
     FSTSerializerBeta *remoteSerializer =
         [[FSTSerializerBeta alloc] initWithDatabaseID:&self.databaseInfo->database_id()];
     FSTLocalSerializer *serializer =
         [[FSTLocalSerializer alloc] initWithRemoteSerializer:remoteSerializer];
 
-    _persistence = [[FSTLevelDB alloc] initWithDirectory:dir serializer:serializer];
+    _persistence = [[FSTLevelDB alloc] initWithOpener:std::move(opener) serializer:serializer];
   } else {
     garbageCollector = [[FSTEagerGarbageCollector alloc] init];
     _persistence = [FSTMemoryPersistence persistence];
   }
 
-  NSError *error;
-  if (![_persistence start:&error]) {
+  Status status = [_persistence start];
+  if (!status.ok()) {
     // If local storage fails to start then just throw up our hands: the error is unrecoverable.
     // There's nothing an end-user can do and nearly all failures indicate the developer is doing
     // something grossly wrong so we should stop them cold in their tracks with a failure they
     // can't ignore.
-    [NSException raise:NSInternalInconsistencyException format:@"Failed to open DB: %@", error];
+    [NSException raise:NSInternalInconsistencyException
+                format:@"Failed to open DB: %s", status.ToString().c_str()];
   }
 
   _localStore = [[FSTLocalStore alloc] initWithPersistence:_persistence

@@ -39,11 +39,7 @@ namespace util = firebase::firestore::util;
 using firebase::firestore::auth::User;
 using firebase::firestore::core::DatabaseInfo;
 using firebase::firestore::model::DatabaseId;
-
-NS_ASSUME_NONNULL_BEGIN
-
-static NSString *const kReservedPathComponent = @"firestore";
-
+using firebase::firestore::local::LevelDbOpener;
 using firebase::firestore::local::LevelDbTransaction;
 using leveldb::DB;
 using leveldb::Options;
@@ -51,15 +47,19 @@ using leveldb::ReadOptions;
 using leveldb::Status;
 using leveldb::WriteOptions;
 
+NS_ASSUME_NONNULL_BEGIN
+
+static NSString *const kReservedPathComponent = @"firestore";
+
 @interface FSTLevelDB ()
 
-@property(nonatomic, copy) NSString *directory;
 @property(nonatomic, assign, getter=isStarted) BOOL started;
 @property(nonatomic, strong, readonly) FSTLocalSerializer *serializer;
 
 @end
 
 @implementation FSTLevelDB {
+  std::unique_ptr<LevelDbOpener> _opener;
   std::unique_ptr<LevelDbTransaction> _transaction;
   std::unique_ptr<leveldb::DB> _ptr;
   FSTTransactionRunner _transactionRunner;
@@ -74,10 +74,10 @@ using leveldb::WriteOptions;
   return options;
 }
 
-- (instancetype)initWithDirectory:(NSString *)directory
-                       serializer:(FSTLocalSerializer *)serializer {
+- (instancetype)initWithOpener:(std::unique_ptr<LevelDbOpener>)opener
+                    serializer:(FSTLocalSerializer *)serializer {
   if (self = [super init]) {
-    _directory = [directory copy];
+    _opener = std::move(opener);
     _serializer = serializer;
     _transactionRunner.SetBackingPersistence(self);
   }
@@ -92,124 +92,24 @@ using leveldb::WriteOptions;
   return _transactionRunner;
 }
 
-+ (NSString *)documentsDirectory {
-#if TARGET_OS_IPHONE
-  NSArray<NSString *> *directories =
-      NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-  return [directories[0] stringByAppendingPathComponent:kReservedPathComponent];
-
-#elif TARGET_OS_MAC
-  NSString *dotPrefixed = [@"." stringByAppendingString:kReservedPathComponent];
-  return [NSHomeDirectory() stringByAppendingPathComponent:dotPrefixed];
-
-#else
-#error "local storage on tvOS"
-  // TODO(mcg): Writing to NSDocumentsDirectory on tvOS will fail; we need to write to Caches
-  // https://developer.apple.com/library/content/documentation/General/Conceptual/AppleTV_PG/
-
-#endif
-}
-
-+ (NSString *)storageDirectoryForDatabaseInfo:(const DatabaseInfo &)databaseInfo
-                           documentsDirectory:(NSString *)documentsDirectory {
-  // Use two different path formats:
-  //
-  //   * persistenceKey / projectID . databaseID / name
-  //   * persistenceKey / projectID / name
-  //
-  // projectIDs are DNS-compatible names and cannot contain dots so there's
-  // no danger of collisions.
-  NSString *directory = documentsDirectory;
-  directory =
-      [directory stringByAppendingPathComponent:util::WrapNSString(databaseInfo.persistence_key())];
-
-  NSString *segment = util::WrapNSString(databaseInfo.database_id().project_id());
-  if (!databaseInfo.database_id().IsDefaultDatabase()) {
-    segment = [NSString
-        stringWithFormat:@"%@.%s", segment, databaseInfo.database_id().database_id().c_str()];
-  }
-  directory = [directory stringByAppendingPathComponent:segment];
-
-  // Reserve one additional path component to allow multiple physical databases
-  directory = [directory stringByAppendingPathComponent:@"main"];
-  return directory;
-}
-
 #pragma mark - Startup
 
-- (BOOL)start:(NSError **)error {
+- (firebase::firestore::util::Status)start {
   HARD_ASSERT(!self.isStarted, "FSTLevelDB double-started!");
   self.started = YES;
-  NSString *directory = self.directory;
-  if (![self ensureDirectory:directory error:error]) {
-    return NO;
+
+  util::StatusOr<std::unique_ptr<leveldb::DB>> result = _opener->Open();
+  if (!result.ok()) {
+    return result.status();
   }
 
-  DB *database = [self createDBWithDirectory:directory error:error];
-  if (!database) {
-    return NO;
-  }
-  _ptr.reset(database);
+  _ptr = std::move(result).ValueOrDie();
+
   LevelDbTransaction transaction(_ptr.get(), "Start LevelDB");
   [FSTLevelDBMigrations runMigrationsWithTransaction:&transaction];
   transaction.Commit();
-  return YES;
-}
 
-/** Creates the directory at @a directory and marks it as excluded from iCloud backup. */
-- (BOOL)ensureDirectory:(NSString *)directory error:(NSError **)error {
-  NSError *localError;
-  NSFileManager *files = [NSFileManager defaultManager];
-
-  BOOL success = [files createDirectoryAtPath:directory
-                  withIntermediateDirectories:YES
-                                   attributes:nil
-                                        error:&localError];
-  if (!success) {
-    *error =
-        [NSError errorWithDomain:FIRFirestoreErrorDomain
-                            code:FIRFirestoreErrorCodeInternal
-                        userInfo:@{
-                          NSLocalizedDescriptionKey : @"Failed to create persistence directory",
-                          NSUnderlyingErrorKey : localError
-                        }];
-    return NO;
-  }
-
-  NSURL *dirURL = [NSURL fileURLWithPath:directory];
-  success = [dirURL setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:&localError];
-  if (!success) {
-    *error = [NSError errorWithDomain:FIRFirestoreErrorDomain
-                                 code:FIRFirestoreErrorCodeInternal
-                             userInfo:@{
-                               NSLocalizedDescriptionKey :
-                                   @"Failed mark persistence directory as excluded from backups",
-                               NSUnderlyingErrorKey : localError
-                             }];
-    return NO;
-  }
-
-  return YES;
-}
-
-/** Opens the database within the given directory. */
-- (nullable DB *)createDBWithDirectory:(NSString *)directory error:(NSError **)error {
-  Options options;
-  options.create_if_missing = true;
-
-  DB *database;
-  Status status = DB::Open(options, [directory UTF8String], &database);
-  if (!status.ok()) {
-    if (error) {
-      NSString *name = [directory lastPathComponent];
-      *error =
-          [FSTLevelDB errorWithStatus:status
-                          description:@"Failed to create database %@ at path %@", name, directory];
-    }
-    return nullptr;
-  }
-
-  return database;
+  return util::Status::OK();
 }
 
 - (LevelDbTransaction *)currentTransaction {

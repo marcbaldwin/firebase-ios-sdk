@@ -20,7 +20,9 @@
 
 #import "Firestore/Source/Local/FSTPersistence.h"
 #include "Firestore/core/src/firebase/firestore/core/database_info.h"
+#include "Firestore/core/src/firebase/firestore/local/leveldb_opener.h"
 #include "Firestore/core/src/firebase/firestore/local/leveldb_transaction.h"
+#include "Firestore/core/src/firebase/firestore/util/status.h"
 #include "leveldb/db.h"
 
 @class FSTLocalSerializer;
@@ -35,25 +37,10 @@ NS_ASSUME_NONNULL_BEGIN
  * Initializes the LevelDB in the given directory. Note that all expensive startup work including
  * opening any database files is deferred until -[FSTPersistence start] is called.
  */
-- (instancetype)initWithDirectory:(NSString *)directory
-                       serializer:(FSTLocalSerializer *)serializer NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithOpener:(std::unique_ptr<firebase::firestore::local::LevelDbOpener>)opener
+                    serializer:(FSTLocalSerializer *)serializer NS_DESIGNATED_INITIALIZER;
 
-- (instancetype)init __attribute__((unavailable("Use -initWithDirectory: instead.")));
-
-/** Finds a suitable directory to serve as the root of all Firestore local storage. */
-+ (NSString *)documentsDirectory;
-
-/**
- * Computes a unique storage directory for the given identifying components of local storage.
- *
- * @param databaseInfo The identifying information for the local storage instance.
- * @param documentsDirectory The root document directory relative to which the storage directory
- *     will be created. Usually just +[FSTLevelDB documentsDir].
- * @return A storage directory unique to the instance identified by databaseInfo.
- */
-+ (NSString *)storageDirectoryForDatabaseInfo:
-                  (const firebase::firestore::core::DatabaseInfo &)databaseInfo
-                           documentsDirectory:(NSString *)documentsDirectory;
+- (instancetype)init NS_UNAVAILABLE;
 
 /**
  * Starts LevelDB-backed persistent storage by opening the database files, creating the DB if it
@@ -62,7 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
  * The leveldb directory is created relative to the appropriate document storage directory for the
  * platform: NSDocumentDirectory on iOS or $HOME/.firestore on macOS.
  */
-- (BOOL)start:(NSError **)error;
+- (firebase::firestore::util::Status)start;
 
 // What follows is the Objective-C++ extension to the API.
 /**

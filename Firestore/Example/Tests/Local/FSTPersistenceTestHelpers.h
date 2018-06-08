@@ -16,18 +16,14 @@
 
 #import <Foundation/Foundation.h>
 
+#include <string>
+
 @class FSTLevelDB;
 @class FSTMemoryPersistence;
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface FSTPersistenceTestHelpers : NSObject
-
-/**
- * @return The directory where a leveldb instance can store data files. Any files that existed
- * there will be deleted first.
- */
-+ (NSString *)levelDBDir;
 
 /**
  * Creates and starts a new FSTLevelDB instance for testing, destroying any previous contents
@@ -41,6 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /** Creates and starts a new FSTMemoryPersistence instance for testing. */
 + (FSTMemoryPersistence *)memoryPersistence;
+
 @end
 
 NS_ASSUME_NONNULL_END
