@@ -64,6 +64,18 @@ class LevelDbOpener {
   std::string directory_;
 };
 
+class MigratingLevelDbOpener : public LevelDbOpener {
+ public:
+  MigratingLevelDbOpener(std::string directory, std::string old_directory)
+      : LevelDbOpener{std::move(directory)}, old_directory_{old_directory} {
+  }
+
+  util::StatusOr<std::unique_ptr<leveldb::DB>> Open() override;
+
+ private:
+  std::string old_directory_;
+};
+
 }  // namespace local
 }  // namespace firestore
 }  // namespace firebase

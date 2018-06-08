@@ -18,6 +18,7 @@
 
 #import <Foundation/Foundation.h>
 
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <utility>
@@ -43,6 +44,7 @@ namespace local {
 namespace {
 
 const char* kReservedPathComponent = "firestore";
+const char* kTrailingPathComponent = "main";
 
 #if TARGET_OS_IPHONE || TARGET_OS_TV
 /**
@@ -76,6 +78,12 @@ std::string DocumentsDirectory() {
 #endif
 }
 
+#if TARGET_OS_IPHONE
+std::string LegacyDocumentsDirectory() {
+  return Path::Join(ExpandDir(NSDocumentDirectory), kReservedPathComponent);
+}
+#endif
+
 std::string StoragePathSuffix(const core::DatabaseInfo& database_info) {
   // Use two different path formats:
   //
@@ -90,7 +98,8 @@ std::string StoragePathSuffix(const core::DatabaseInfo& database_info) {
   }
 
   // Reserve one additional path component to allow multiple physical databases
-  return Path::Join(database_info.persistence_key(), project_key, "main");
+  return Path::Join(database_info.persistence_key(), project_key,
+                    kTrailingPathComponent);
 }
 
 }  // namespace
@@ -135,7 +144,14 @@ std::unique_ptr<LevelDbOpener> LevelDbOpener::Create(
     const core::DatabaseInfo& database_info) {
   std::string suffix = StoragePathSuffix(database_info);
   std::string dir = Path::Join(DocumentsDirectory(), suffix);
+
+#if TARGET_OS_IPHONE
+  std::string legacy_dir = Path::Join(LegacyDocumentsDirectory(), suffix);
+  return absl::make_unique<MigratingLevelDbOpener>(dir, legacy_dir);
+
+#else
   return absl::make_unique<LevelDbOpener>(dir);
+#endif
 }
 
 util::StatusOr<std::unique_ptr<leveldb::DB>> LevelDbOpener::Open() {
@@ -147,6 +163,24 @@ util::StatusOr<std::unique_ptr<leveldb::DB>> LevelDbOpener::Open() {
   leveldb::Options options;
   options.create_if_missing = true;
   return Open(directory_, options);
+}
+
+util::StatusOr<std::unique_ptr<leveldb::DB>> MigratingLevelDbOpener::Open() {
+  if (!util::Exists(directory()) && util::Exists(old_directory_)) {
+    // Move the old directory to the new
+    absl::string_view parent_dir = Path::Dirname(directory());
+    Status status = util::RecursivelyCreateDir(parent_dir);
+    if (!status.ok()) {
+      return status;
+    }
+
+    if (rename(old_directory_.c_str(), directory().c_str())) {
+      return util::Status::FromErrno(
+          errno, util::StringFormat("Failed to rename directory %s into %s",
+                                    old_directory_, parent_dir));
+    }
+  }
+  return util::StatusOr<std::unique_ptr<leveldb::DB>>{};
 }
 
 }  // namespace local

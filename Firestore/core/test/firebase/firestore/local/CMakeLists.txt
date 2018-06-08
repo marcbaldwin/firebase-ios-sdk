@@ -41,3 +41,11 @@ cc_test(
     firebase_firestore_model
     firebase_firestore_protos_libprotobuf
 )
+
+if(APPLE)
+  target_sources(
+    firebase_firestore_local_test
+    PRIVATE
+    leveldb_opener_test.mm
+  )
+endif()
