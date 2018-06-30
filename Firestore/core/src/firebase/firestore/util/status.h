@@ -51,7 +51,30 @@ class ABSL_MUST_USE_RESULT Status {
   }
 
   /// Creates a status object from the given errno error code and message.
+  static Status FromErrno(absl::string_view msg);
   static Status FromErrno(int errno_code, absl::string_view msg);
+
+  template <typename... FA>
+  static Status FromErrno(int errno_code,
+                          const char* message,
+                          const FA&... args) {
+    return FromErrno(errno_code, StringFormat(message, args...));
+  }
+
+  template <typename... FA>
+  static Status FromErrno(const char* message, const FA&... args) {
+    return FromErrno(StringFormat(message, args...));
+  }
+
+#if defined(_WIN32)
+  template <typename... FA>
+  static status FromLastError(const char* message, const FA&... args);
+
+  template <typename... FA>
+  static status FromLastError(DWORD error,
+                              const char* message,
+                              const FA&... args);
+#endif  // defined(_WIN32)
 
 #if defined(__OBJC__)
   static Status FromNSError(NSError* error);

@@ -51,7 +51,7 @@ class PathView {
       : pathname_{pathname.data()}, size_{pathname.size()} {
   }
 
-  // PathView(const Path& path);  // NOLINT(runtime/explicit)
+  PathView(const Path& path);
 
   bool empty() const {
     return size_ == 0;
@@ -120,10 +120,10 @@ class Path {
   }
 
 #if defined(_WIN32)
-  std::string ToString();
+  std::string ToString() const;
 
 #else
-  const std::string& ToString() {
+  const std::string& ToString() const {
     return pathname_;
   }
 #endif  // defined(_WIN32)

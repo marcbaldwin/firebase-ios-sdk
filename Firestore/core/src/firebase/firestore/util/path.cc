@@ -126,7 +126,7 @@ Path Path::FromUtf8(absl::string_view utf8_pathname) {
 }
 
 #if defined(_WIN32)
-std::string ToString() {
+std::string ToString() const {
   return NativeToUtf8(pathname_);
 }
 #endif

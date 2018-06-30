@@ -20,6 +20,8 @@
 
 #include "Firestore/core/src/firebase/firestore/util/strerror.h"
 #include "Firestore/core/src/firebase/firestore/util/string_format.h"
+#include "Firestore/core/src/firebase/firestore/util/string_win.h"
+#include "absl/memory/memory.h"
 
 namespace firebase {
 namespace firestore {
@@ -27,7 +29,7 @@ namespace util {
 
 Status::Status(FirestoreErrorCode code, absl::string_view msg) {
   HARD_ASSERT(code != FirestoreErrorCode::Ok);
-  state_ = std::unique_ptr<State>(new State);
+  state_ = absl::make_unique<State>();
   state_->code = code;
   state_->msg = static_cast<std::string>(msg);
 }
@@ -185,8 +187,13 @@ static FirestoreErrorCode CodeForErrno(int errno_code) {
     case ECANCELED:  // Operation cancelled
       return FirestoreErrorCode::Cancelled;
 
-    default: { return FirestoreErrorCode::Unknown; }
+    default:
+      return FirestoreErrorCode::Unknown;
   }
+}
+
+Status Status::FromErrno(absl::string_view msg) {
+  return FromErrno(errno, msg);
 }
 
 Status Status::FromErrno(int errno_code, absl::string_view msg) {
@@ -195,6 +202,96 @@ Status Status::FromErrno(int errno_code, absl::string_view msg) {
                 util::StringFormat("%s (errno %s: %s)", msg, errno_code,
                                    StrError(errno_code))};
 }
+
+#if defined(_WIN32)
+/**
+ * Returns the Canonical error code for the given Windows API error code as
+ * obtained from GetLastError().
+ */
+static FirestoreErrorCode CodeFromLastError(DWORD error) {
+  switch (error) {
+    case ERROR_SUCCESS:
+      return FirestoreErrorCode::Ok;
+
+    case ERROR_INVALID_ACCESS:
+      return FirestoreErrorCode::Internal;
+
+    case ERROR_INVALID_FUNCTION:
+    case ERROR_INVALID_HANDLE:
+    case ERROR_INVALID_NAME:
+      return FirestoreErrorCode::InvalidArgument;
+
+      // return FirestoreErrorCode::DeadlineExceeded;
+
+    case ERROR_FILE_NOT_FOUND:
+    case ERROR_PATH_NOT_FOUND:
+    case ERROR_INVALID_DRIVE:
+    case ERROR_BAD_NETPATH:
+    case ERROR_DEV_NOT_EXIST:
+      return FirestoreErrorCode::NotFound;
+
+    case ERROR_FILE_EXISTS:
+    case ERROR_ALREADY_EXISTS:
+      return FirestoreErrorCode::AlreadyExists;
+
+    case ERROR_ACCESS_DENIED:
+    case ERROR_SHARING_VIOLATION:
+    case ERROR_WRITE_PROTECT:
+    case ERROR_LOCK_VIOLATION:
+      return FirestoreErrorCode::PermissionDenied;
+
+      // return FirestoreErrorCode::FailedPrecondition;
+
+    case ERROR_TOO_MANY_OPEN_FILES:
+    case ERROR_NOT_ENOUGH_MEMORY:
+    case ERROR_OUTOFMEMORY:
+    case ERROR_NO_MORE_FILES:
+    case ERROR_DISK_FULL:
+    case ERROR_HANDLE_DISK_FULL:
+      return FirestoreErrorCode::ResourceExhausted;
+
+      // return FirestoreErrorCode::OutOfRange;
+
+    case ERROR_CALL_NOT_IMPLEMENTED:
+      return FirestoreErrorCode::Unimplemented;
+
+    case ERROR_NOT_READY:
+      return FirestoreErrorCode::Unavailable;
+
+      // return FirestoreErrorCode::Aborted;
+
+      // return FirestoreErrorCode::Cancelled;
+
+    default:
+      return FirestoreErrorCode::Unknown;
+  }
+}
+
+Status Status::FromLastError(DWORD error, absl::string_view msg) {
+  FirestoreErrorCode canonical_code = CodeForLastError(error);
+
+  wchar_t* error_text = nullptr;
+  DWORD count = FormatMessageW(
+      FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER |
+          FORMAT_MESSAGE_IGNORE_INSERTS,
+      nullptr, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+      (wchar_t*)&error_text, 0, nullptr);
+
+  std::string formatted;
+  if (count == 0 || error_text == nullptr) {
+    formatted = util::StringFormat(
+        "%s (error %s; unknown error %s while getting error text)", msg, error,
+        result);
+  } else {
+    formatted = NativeToUtf8(error_text, count);
+    LocalFree(error_text);
+    error_text = nullptr;
+  }
+
+  return Status{canonical_code,
+                util::StringFormat("%s (error %s: %s)", msg, error, formatted)};
+}
+#endif  // defined(_WIN32)
 
 void Status::Update(const Status& new_status) {
   if (ok()) {
@@ -206,7 +303,7 @@ void Status::SlowCopyFrom(const State* src) {
   if (src == nullptr) {
     state_ = nullptr;
   } else {
-    state_ = std::unique_ptr<State>(new State(*src));
+    state_ = absl::make_unique<State>(*src);
   }
 }
 

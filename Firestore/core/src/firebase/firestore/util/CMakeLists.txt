@@ -185,6 +185,10 @@ cc_library(
     config.h
     defer.cc
     defer.h
+    filesystem.cc
+    filesystem_posix.cc
+    filesystem_win.cc
+    filesystem.h
     hashing.h
     iterator_adaptors.h
     ordered_code.cc
@@ -216,6 +220,7 @@ cc_library(
 if(APPLE)
   target_sources(
     firebase_firestore_util PRIVATE
+    filesystem_apple.mm
     status_apple.mm
   )
 endif()

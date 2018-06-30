@@ -44,7 +44,7 @@ template <int I>
 struct FormatChoice : FormatChoice<I + 1> {};
 
 template <>
-struct FormatChoice<5> {};
+struct FormatChoice<6> {};
 
 }  // namespace internal
 
@@ -128,12 +128,20 @@ class FormatArg : public absl::AlphaNum {
       : AlphaNum{absl::Hex{reinterpret_cast<uintptr_t>(pointer_value)}} {
   }
 
+  template <
+      typename T,
+      typename = decltype(std::declval<T>().ToString())
+  >
+  FormatArg(const T& value, internal::FormatChoice<5>)
+      : AlphaNum{value.ToString()} {
+  }
+
   /**
    * As a final fallback, creates a FormatArg from any type of value that
    * absl::AlphaNum accepts.
    */
   template <typename T>
-  FormatArg(T&& value, internal::FormatChoice<5>)
+  FormatArg(T&& value, internal::FormatChoice<6>)
       : AlphaNum{std::forward<T>(value)} {
   }
 };
