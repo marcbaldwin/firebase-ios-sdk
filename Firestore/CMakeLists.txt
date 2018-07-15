@@ -39,7 +39,6 @@ include(podspec_rules)
 
 
 # External packages
-find_package(LevelDB REQUIRED)
 find_package(ZLIB)
 
 
@@ -100,6 +99,19 @@ if(NOT ZLIB_FOUND)
       $<BUILD_INTERFACE:${FIREBASE_BINARY_DIR}/src/grpc/third_party/zlib>
   )
 endif()
+
+
+# LevelDB
+set(LEVELDB_BUILD_TESTS OFF CACHE BOOL "Firestore disabled")
+set(LEVELDB_BUILD_BENCHMARKS OFF CACHE BOOL "Firestore disabled")
+set(LEVELDB_INSTALL OFF CACHE BOOL "Firestore disabled")
+add_subdirectory(
+  ${FIREBASE_BINARY_DIR}/src/leveldb
+  ${FIREBASE_BINARY_DIR}/src/leveldb-build
+  EXCLUDE_FROM_ALL
+)
+
+add_alias(LevelDB::LevelDB leveldb)
 
 
 # nanopb
