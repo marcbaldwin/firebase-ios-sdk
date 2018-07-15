@@ -16,6 +16,7 @@
 
 #include "Firestore/core/src/firebase/firestore/util/path.h"
 
+#include "Firestore/core/src/firebase/firestore/util/string_win.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/string_view.h"
 
@@ -25,20 +26,13 @@ namespace util {
 
 namespace {
 
-static constexpr absl::string_view::size_type npos = absl::string_view::npos;
-
-/** Returns the given path with its leading drive letter removed. */
-inline absl::string_view StripDriveLetter(absl::string_view path) {
 #if defined(_WIN32)
-  if (path.size() >= 2 && path[1] == ':' && absl::ascii_isalpha(path[0])) {
-    return path.substr(2);
-  }
-  return path;
-
+constexpr wchar_t kPreferredSeparator = L'\\';
 #else
-  return path;
-#endif  // defined(_WIN32)
-}
+constexpr char kPreferredSeparator = '/';
+#endif
+
+static constexpr absl::string_view::size_type npos = absl::string_view::npos;
 
 /** Returns true if the given character is a pathname separator. */
 inline bool IsSeparator(char c) {
@@ -51,58 +45,113 @@ inline bool IsSeparator(char c) {
 
 }  // namespace
 
-absl::string_view Path::Basename(absl::string_view pathname) {
-  size_t slash = pathname.find_last_of('/');
-
+PathView PathView::Basename() const {
+  size_t slash = LastSeparator();
   if (slash == npos) {
     // No path separator found => the whole string.
-    return pathname;
+    return *this;
   }
 
   // Otherwise everything after the slash is the basename (even if empty string)
-  return pathname.substr(slash + 1);
+  size_t start = slash + 1;
+  return PathView{pathname_ + start, size_ - start};
 }
 
-absl::string_view Path::Dirname(absl::string_view pathname) {
-  size_t last_slash = pathname.find_last_of('/');
-
+PathView PathView::Dirname() const {
+  size_t last_slash = LastSeparator();
   if (last_slash == npos) {
     // No path separator found => empty string. Conformance with POSIX would
     // have us return "." here.
-    return pathname.substr(0, 0);
+    return PathView{pathname_, 0};
   }
 
   // Collapse runs of slashes.
-  size_t nonslash = pathname.find_last_not_of('/', last_slash);
-  if (nonslash == npos) {
+  size_t non_slash = LastNonSeparator(last_slash);
+  if (non_slash == npos) {
     // All characters preceding the last path separator are slashes
-    return pathname.substr(0, 1);
+    return PathView{pathname_, 1};
   }
 
-  last_slash = nonslash + 1;
+  last_slash = non_slash + 1;
 
   // Otherwise everything up to the slash is the parent directory
-  return pathname.substr(0, last_slash);
+  return PathView{pathname_, last_slash};
 }
 
-bool Path::IsAbsolute(absl::string_view path) {
-  path = StripDriveLetter(path);
-  return !path.empty() && IsSeparator(path.front());
+bool PathView::IsAbsolute() const {
+  PathView path = StripDriveLetter();
+  return !path.empty() && IsSeparator(path.pathname_[0]);
 }
 
-void Path::JoinAppend(std::string* base, absl::string_view path) {
-  if (IsAbsolute(path)) {
-    base->assign(path.data(), path.size());
+size_t PathView::LastNonSeparator(size_t pos) const {
+  if (empty()) return npos;
+
+  size_t i = std::min(pos, size_);
+  for (; i-- > 0;) {
+    if (!IsSeparator(pathname_[i])) {
+      return i;
+    }
+  }
+  return npos;
+}
+
+size_t PathView::LastSeparator(size_t pos) const {
+  if (empty()) return npos;
+
+  size_t i = std::min(pos, size_);
+  for (; i-- > 0;) {
+    if (IsSeparator(pathname_[i])) {
+      return i;
+    }
+  }
+  return npos;
+}
+
+/** Returns the given path with its leading drive letter removed. */
+PathView PathView::StripDriveLetter() const {
+#if defined(_WIN32)
+  if (size_ >= 2 && pathname_[1] == L':' && absl::ascii_isalpha(pathname_[0])) {
+    return PathView{pathname_ + 2, size_ - 2};
+  }
+  return *this;
+
+#else
+  return *this;
+#endif  // defined(_WIN32)
+}
+
+
+Path Path::FromUtf8(absl::string_view utf8_pathname) {
+  return Path{Utf8ToNative(utf8_pathname)};
+}
+
+#if defined(_WIN32)
+std::string ToString() {
+  return NativeToUtf8(pathname_);
+}
+#endif
+
+Path Path::Basename() const {
+  return Path{PathView{*this}.Basename()};
+}
+
+Path Path::Dirname() const {
+  return Path{PathView{*this}.Dirname()};
+}
+
+void Path::JoinAppend(const PathView& path) {
+  if (path.IsAbsolute()) {
+    pathname_.assign(path.pathname_);
 
   } else {
-    size_t nonslash = base->find_last_not_of('/');
-    if (nonslash != npos) {
-      base->resize(nonslash + 1);
-      base->push_back('/');
+    size_t non_slash = PathView(pathname_).LastNonSeparator();
+    if (non_slash != npos) {
+      pathname_.resize(non_slash + 1);
+      pathname_.push_back(kPreferredSeparator);
     }
 
     // If path started with a slash we'd treat it as absolute above
-    base->append(path.data(), path.size());
+    pathname_.append(path.pathname_);
   }
 }
 
