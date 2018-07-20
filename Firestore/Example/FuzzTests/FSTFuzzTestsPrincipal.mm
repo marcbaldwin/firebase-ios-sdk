@@ -19,6 +19,7 @@
 #include "LibFuzzer/FuzzerDefs.h"
 
 #include "Firestore/Example/FuzzTests/FuzzingTargets/FSTFuzzTestFieldPath.h"
+#include "Firestore/Example/FuzzTests/FuzzingTargets/FSTFuzzTestFieldValue.h"
 #include "Firestore/Example/FuzzTests/FuzzingTargets/FSTFuzzTestSerializer.h"
 
 #include "Firestore/core/src/firebase/firestore/util/log.h"
@@ -31,7 +32,7 @@ namespace {
 
 // A list of targets to fuzz test. Should be kept in sync with the method
 // GetFuzzingTarget().
-enum class FuzzingTarget { kNone, kSerializer, kFieldPath };
+enum class FuzzingTarget { kNone, kSerializer, kFieldPath, kFieldValue };
 
 // Directory to which crashing inputs are written. Must include the '/' at the
 // end because libFuzzer prepends this path to the crashing input file name.
@@ -63,6 +64,9 @@ FuzzingTarget GetFuzzingTarget() {
   }
   if (fuzzing_target == "FIELDPATH") {
     return FuzzingTarget::kFieldPath;
+  }
+  if (fuzzing_target == "FIELDVALUE") {
+    return FuzzingTarget::kFieldValue;
   }
   LOG_WARN("Invalid fuzzing target: %s", fuzzing_target);
   return FuzzingTarget::kNone;
@@ -100,6 +104,12 @@ int RunFuzzTestingMain() {
       dict_location = fuzzing::GetFieldPathDictionaryLocation(resources_location);
       corpus_location = fuzzing::GetFieldPathCorpusLocation(resources_location);
       fuzzer_function = fuzzing::FuzzTestFieldPath;
+      break;
+
+    case FuzzingTarget::kFieldValue:
+      dict_location = fuzzing::GetFieldValueDictionaryLocation(resources_location);
+      corpus_location = fuzzing::GetFieldValueCorpusLocation(resources_location);
+      fuzzer_function = fuzzing::FuzzTestFieldValue;
       break;
 
     case FuzzingTarget::kNone:
